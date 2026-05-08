@@ -6,14 +6,158 @@ import pytz
 from datetime import datetime
 
 # --- CONFIGURATION DE LA PAGE ---
-st.set_page_config(page_title="LXT BambooSync Montreal", layout="wide", page_icon="📊")
+st.set_page_config(page_title="LXT BambooSync", layout="wide", page_icon="📊")
 
-# Récupération des secrets
+# --- HACK CSS POUR LE CALENDRIER ---
+st.markdown("""
+    <style>
+    div[data-baseweb="datepicker"] { z-index: 999999 !important; }
+    .stSidebar [data-testid="stVerticalBlock"] { padding-top: 2rem; }
+    </style>
+    """, unsafe_allow_html=True)
+
+# --- AUTHENTIFICATION ---
+def check_password():
+    def password_entered():
+        if st.session_state["password"] == st.secrets["APP_PASSWORD"]:
+            st.session_state["password_correct"] = True
+            del st.session_state["password"]
+        else:
+            st.session_state["password_correct"] = False
+
+    if "password_correct" not in st.session_state:
+        st.text_input("Mot de passe requis", type="password", on_change=password_entered, key="password")
+        return False
+    elif not st.session_state["password_correct"]:
+        st.text_input("Mot de passe requis", type="password", on_change=password_entered, key="password")
+        st.error("😕 Mot de passe incorrect.")
+        return False
+    return True
+
+if not check_password():
+    st.stop()
+
+# --- RÉCUPÉRATION DES SECRETS ---
 API_KEY = st.secrets.get("BAMBOOHR_API_KEY")
 SUBDOMAIN = st.secrets.get("BAMBOOHR_SUBDOMAIN", "lxt")
 COMPANY_TZ = "America/Toronto"
 
-# ---------- UTILS DE NORMALISATION ----------
+# --- MAPPINGS DES ÉQUIPES ---
+MAPPINGS = {
+    "Montréal Team": [
+        {"hrid":5917, "name":"Felicia Wong", "courriel":"mu_t1-cab662@sdoperapera.com", "employeeId":1815,"Language":"Australian","rater_id":298069},
+        {"hrid":6331, "name":"Alexander Slack", "courriel":"mu_t1-846c88@sdoperapera.com", "employeeId":2343,"Language":"Australian", "rater_id":449089},
+        {"hrid":6339, "name":"Ian Zhi Quan Lee", "courriel":"mu_t1-ff4c16@sdoperapera.com", "employeeId":2351,"Language":"Australian", "rater_id":441514},
+        {"hrid":6338, "name":"Dean Ash", "courriel":"mu_t1-214777@sdoperapera.com", "employeeId":2350,"Language":"Australian", "rater_id":447374},
+        {"hrid":6343, "name":"Hayley Puckeridge", "courriel":"mu_t1-7dbd16@sdoperapera.com", "employeeId":2356,"Language":"Australian", "rater_id":447273},
+        {"hrid":6347, "name":"Gilson Cruzat", "courriel":"mu_t1-65a457@sdoperapera.com", "employeeId":2360,"Language":"Australian", "rater_id":434645},
+        {"hrid":6354, "name":"Robyn Treacy", "courriel":"mu_t1-d4bdd9@sdoperapera.com", "employeeId":2367,"Language":"Australian", "rater_id":438888},
+        {"hrid":1309, "name":"Joshua Ortaleza", "courriel":"mu_t1-df4a19@sdoperapera.com", "employeeId":568,"Language":"Australian", "rater_id":447172},
+        {"hrid":6332, "name":"Alexandra de Guzman", "courriel":"mu_t1-469024@sdoperapera.com", "employeeId":2344,"Language":"Australian", "rater_id":448788},
+        {"hrid":6010, "name":"Jean Kyle Alvarez", "courriel":"mu_t1-a872b5@sdoperapera.com", "employeeId":1914,"Language":"Australian", "rater_id":352823},
+        {"hrid":5718, "name":"Ikechukwu Ejechi", "courriel":"mu_t1-a827ac@sdoperapera.com", "employeeId":1600,"Language":"English", "rater_id":414236},
+        {"hrid":5712, "name":"Derrick Narkah", "courriel":"mu_t1-a07134@sdoperapera.com", "employeeId":1597,"Language":"English", "rater_id":413833},
+        {"hrid":6129, "name":"Xiaoman Cai", "courriel":"mu_t1-a2b19e@sdoperapera.com", "employeeId":2047,"Language":"Taiwanese", "rater_id":357365},
+        {"hrid":6137, "name":"Hsiu Fang Hung", "courriel":"mu_t1-7854df@sdoperapera.com", "employeeId":2055,"Language":"Taiwanese", "rater_id":375453},
+        {"hrid":6026, "name":"Weiqiang Wang", "courriel":"mu_t1-3fde0a@sdoperapera.com", "employeeId":1930,"Language":"Taiwanese", "rater_id":406560},
+        {"hrid":6126, "name":"Huilei Wang", "courriel":"mu_t1-603f10@sdoperapera.com", "employeeId":2044,"Language":"Taiwanese", "rater_id":439697},
+        {"hrid":6184, "name":"Chia Fan Hsu (Fan)", "courriel":"mu_t1-e829a0@sdoperapera.com", "employeeId":2103,"Language":"Taiwanese", "rater_id":381319},
+        {"hrid":6265, "name":"Hsinyi Lee", "courriel":"mu_t1-6147ae@sdoperapera.com", "employeeId":2267,"Language":"Taiwanese", "rater_id":441008},
+        {"hrid":6266, "name":"Lixiong Wei", "courriel":"mu_t1-8de2fa@sdoperapera.com", "employeeId":2268,"Language":"Cantonese", "rater_id":441109},
+        {"hrid":6196, "name":"Yu Kiu Li", "courriel":"mu_t1-426166@sdoperapera.com", "employeeId":2116,"Language":"Cantonese", "rater_id":439899},
+        {"hrid":6195, "name":"Lu Yan Li", "courriel":"mu_t1-365930@sdoperapera.com", "employeeId":2115, "Language":"Cantonese", "rater_id":440302},
+        {"hrid":6115, "name":"Phouangsouvanh Misaiphon", "courriel":"mu_t1-7eb49e@sdoperapera.com", "employeeId":2021, "Language":"Lao", "rater_id":434242},
+        {"hrid":5959, "name":"Sayprasongh Savann", "courriel":"mu_t1-458248@sdoperapera.com", "employeeId":1862, "Language":"Lao", "rater_id":439695},
+        {"hrid":5957, "name":"Saleumsith Misaiphon", "courriel":"mu_t1-eacd8c@sdoperapera.com", "employeeId":1860, "Language":"Lao", "rater_id":438079},
+        {"hrid":6111, "name":"Ariya Misaiphon", "courriel":"mu_t1-bb9a18@sdoperapera.com", "employeeId":2018, "Language":"Lao", "rater_id":439998},
+        {"hrid":6109, "name":"Souriny Phomthavong", "courriel":"mu_t1-1db9ee@sdoperapera.com", "employeeId":2017, "Language":"Lao","rater_id":440301},
+        {"hrid":5971, "name":"Budiman Lauw", "courriel":"mu_t1-88a22a@sdoperapera.com", "employeeId":1876, "Language":"Indonesian", "rater_id":352010},
+        {"hrid":5941, "name":"Hyun Jeong Park", "courriel":"mu_t1-a85ca4@sdoperapera.com", "employeeId":1841, "Language":"Korean", "rater_id":329787},
+        {"hrid":6299, "name":"Lucas Su-hyun Park", "courriel":"mu_t1-a5526c@sdoperapera.com", "employeeId":2305, "Language":"Korean", "rater_id":445252},
+        {"hrid":5874, "name":"Jeremy Jaret Cruz", "courriel":"mu_t1-f7be16@sdoperapera.com", "employeeId":1767, "Language":"French", "rater_id":389892},
+        {"hrid":1489, "name":"Dudley Orestil", "courriel":"mu_t1-274483@sdoperapera.com", "employeeId":751, "Language":"French", "rater_id":None},
+        {"hrid":5868, "name":"Yannis Guibinga", "courriel":"mu_t1-295d80@sdoperapera.com", "employeeId":1761, "Language":"French", "rater_id":354636},
+        {"hrid":5866, "name":"Bernard Boucher", "courriel":"mu_t1-380a88@sdoperapera.com", "employeeId":1759, "Language":"French", "rater_id":414438},
+        {"hrid":6297, "name":"Alissa Rivera-Laporte", "courriel":"mu_t1-cf4f6f@sdoperapera.com", "employeeId":2303, "Language":"French", "rater_id":445656},
+        {"hrid":6314, "name":"Lea Vong", "courriel":"mu_t1-bd5449@sdoperapera.com", "employeeId":2322, "Language":"French", "rater_id":448786},
+        {"hrid":6313, "name":"Tidiane Yeo", "courriel":"mu_t1-bc0d65@sdoperapera.com", "employeeId":2321, "Language":"French", "rater_id":448787},
+        {"hrid":5899, "name":"Ugo Trelis", "courriel":"mu_t1-d5cb9b@sdoperapera.com", "employeeId":1789, "Language":"French", "rater_id":414034},
+        {"hrid":5871, "name":"Hiba El Moataqid", "courriel":"mu_t1-2e8579@sdoperapera.com", "employeeId":1764, "Language":"French", "rater_id":354838},
+        {"hrid":5348, "name":"Azizbek Numonov", "courriel":"mu_t1-1af543@sdoperapera.com", "employeeId":1509, "Language":"Uzbek", "rater_id":445154},
+        {"hrid":6034, "name":"Khusniyabonu Imomova", "courriel":"mu_t1-33bfb4@sdoperapera.com", "employeeId":1937, "Language":"Uzbek", "rater_id":445555},
+        {"hrid":5840, "name":"Abdulatif Nematullaev", "courriel":"mu_t1-ed775f@sdoperapera.com", "employeeId":1732, "Language":"Uzbek", "rater_id":445355},
+        {"hrid":6306, "name":"Madina Kodirova", "courriel":"mu_t1-216d9c@sdoperapera.com", "employeeId":2312, "Language":"Uzbek", "rater_id":445050},
+        {"hrid":6303, "name":"Asliddin Malikov", "courriel":"mu_t1-633923@sdoperapera.com", "employeeId":2309, "Language":"Uzbek", "rater_id":445356},
+        {"hrid":6304, "name":"Khumoyun Ergashev", "courriel":"mu_t1-936f8c@sdoperapera.com", "employeeId":2310, "Language":"Uzbek", "rater_id":445051},
+        {"hrid":6357, "name":"Jennafa Rosenblatt", "courriel":"mu_t1-1c3bd3@sdoperapera.com", "employeeId":2370,"Language":"Australian", "rater_id":439392},
+        {"hrid":6116, "name":"Soukhinkham Pakdimounivong", "courriel":"mu_t1-93f997@sdoperapera.com", "employeeId":2022,"Language":"Lao", "rater_id":444747},
+        {"hrid":6363, "name":"Robin Graham", "courriel":"mu_t1-53daf4@sdoperapera.com", "employeeId":2388,"Language":"Australian", "rater_id":443841},
+        {"hrid":5997, "name":"Hafsa Patel", "courriel":"mu_t1-25701a@sdoperapera.com", "employeeId":1902,"Language":"Australian", "rater_id":450402},
+        {"hrid":6370, "name":"Patricia Hamilton", "courriel":"mu_t1-09472c@sdoperapera.com", "employeeId":2397,"Language":"French", "rater_id":453735},
+        {"hrid":6368, "name":"Yannick Coulibaly", "courriel":"mu_t1-792ce8@sdoperapera.com", "employeeId":2395,"Language":"French", "rater_id":455048},
+        {"hrid":6372, "name":"Marc-André Veillette", "courriel":"mu_t1-0e3dc2@sdoperapera.com", "employeeId":2399,"Language":"French", "rater_id":459189},
+        {"hrid":6369, "name":"Chamy Diabate", "courriel":"mu_t1-b396e6@sdoperapera.com", "employeeId":2396,"Language":"French", "rater_id":447474},
+        {"hrid":6373, "name":"Chih Yu Chou (Jenny)", "courriel":"mu_t1-ae3afd@sdoperapera.com", "employeeId":2408,"Language":"Taiwanese", "rater_id":470301}
+    ],
+    "Global Team": [
+        {"hrid":1115, "name":"Albee Charis Ponio", "courriel":"mu_t1-6457e2@sdoperapera.com", "employeeId":340,"rater_id":258364, "Language": ""},
+        {"hrid":6057, "name":"Anastasia Andria", "courriel":"mu_t1-e84408@sdoperapera.com", "employeeId":1961, "rater_id":355950, "Language": ""},
+        {"hrid":1067, "name":"Arpana Gupta", "courriel":"mu_t1-pm25@sdoperapera.com", "employeeId":248, "rater_id":None, "Language": ""},
+        {"hrid":5125, "name":"Booma Subramanian", "courriel":"mu_t1-463015@sdoperapera.com", "employeeId":950, "rater_id":None, "Language": ""},
+        {"hrid":5735, "name":"Brian Holder", "courriel":"mu_t1-8c6ff6@sdoperapera.com", "employeeId":1618, "rater_id":278571, "Language": ""},
+        {"hrid":5144, "name":"Budhi Martaputra", "courriel":"mu_t1-3910a2@sdoperapera.com", "employeeId":977, "rater_id":None, "Language": ""},
+        {"hrid":5213, "name":"Changhan Kim", "courriel":"mu_t1-fd749d@sdoperapera.com", "employeeId":1050, "rater_id":165115, "Language": ""},
+        {"hrid":6006, "name":"Christoper Lum", "courriel":"mu_t1-7bc8d6@sdoperapera.com", "employeeId":1910, "rater_id":426766, "Language": ""},
+        {"hrid":5849, "name":"Daniel Milkovic", "courriel":"mu_t1-6fea3e@sdoperapera.com", "employeeId":1741, "rater_id":287264, "Language": ""},
+        {"hrid":1099, "name":"Dhara Mistry", "courriel":"mu_t1-78b8cf@sdoperapera.com", "employeeId":295, "rater_id":None, "Language": ""},
+        {"hrid":5992, "name":"Duc Huy Tran", "courriel":"mu_t1-4c9a29@sdoperapera.com", "employeeId":1897, "rater_id":351712, "Language": ""},
+        {"hrid":5235, "name":"Eunjung Son", "courriel":"mu_t1-822015@sdoperapera.com", "employeeId":1068, "rater_id":164710, "Language": ""},
+        {"hrid":6172, "name":"Fei Wong", "courriel":"mu_t1-3495ff@sdoperapera.com", "employeeId":2091, "rater_id":382219, "Language": ""},
+        {"hrid":5787, "name":"Han-Chen Cheng", "courriel":"mu_t1-e46c0e@sdoperapera.com", "employeeId":1671, "rater_id":319384, "Language": ""},
+        {"hrid":5230, "name":"Jim Chen", "courriel":"mu_t1-679e00@sdoperapera.com", "employeeId":1521, "rater_id":258665, "Language": ""},
+        {"hrid":5164, "name":"Johannes Wuisan", "courriel":"mu_t1-3f8c56@sdoperapera.com", "employeeId":1001, "rater_id":287564, "Language": ""},
+        {"hrid":1172, "name":"Jongho Kim", "courriel":"mu_t1-74a055@sdoperapera.com", "employeeId":417, "rater_id":101774, "Language": ""},
+        {"hrid":5302, "name":"Khaleah Lawrence", "courriel":"mu_t1-ced528@sdoperapera.com", "employeeId":1122, "rater_id":174006, "Language": ""},
+        {"hrid":5786, "name":"Kin Ming Ng (Martin)", "courriel":"mu_t1-73cfc3@sdoperapera.com", "employeeId":1670, "rater_id":319079, "Language": ""},
+        {"hrid":6133, "name":"Kit yee Lau (Shirley)", "courriel":"mu_t1-43ad79@sdoperapera.com", "employeeId":2051, "rater_id":378988, "Language": ""},
+        {"hrid":5683, "name":"Marcelius Cendana", "courriel":"mu_t1-8d6cbe@sdoperapera.com", "employeeId":1563, "rater_id":272710, "Language": ""},
+        {"hrid":1164, "name":"Margarita Sandoval", "courriel":"mu_t1-dc7afc@sdoperapera.com", "employeeId":407, "rater_id":274629, "Language": ""},
+        {"hrid":1078, "name":"Nargish Sumrani", "courriel":"mu_t1-pm24@sdoperapera.com", "employeeId":265, "rater_id":None, "Language": ""},
+        {"hrid":5241, "name":"Neha Neha", "courriel":"mu_t1-43ddda@sdoperapera.com", "employeeId":1060, "rater_id":169457, "Language": ""},
+        {"hrid":6059, "name":"Olivia Allen Himawan", "courriel":"mu_t1-66107e@sdoperapera.com", "employeeId":1963, "rater_id":356456, "Language": ""},
+        {"hrid":5679, "name":"Reny Katopo", "courriel":"mu_t1-d9197b@sdoperapera.com", "employeeId":1558, "rater_id":272104, "Language": ""},
+        {"hrid":5995, "name":"Roger Pineda", "courriel":"mu_t1-9e4451@sdoperapera.com", "employeeId":1900, "rater_id":352116, "Language": ""},
+        {"hrid":5058, "name":"Semmy Park", "courriel":"mu_t1-f342a3@sdoperapera.com", "employeeId":857, "rater_id":144198, "Language": ""},
+        {"hrid":5098, "name":"Seu-Ming Chen (David)", "courriel":"mu_t1-83f3d1@sdoperapera.com", "employeeId":1546, "rater_id":382522, "Language": ""},
+        {"hrid":6058, "name":"Theresia Arianti", "courriel":"mu_t1-6e6164@sdoperapera.com", "employeeId":1962, "rater_id":356355, "Language": ""},
+        {"hrid":6146, "name":"Wei Yuan Lai", "courriel":"mu_t1-20aac4@sdoperapera.com", "employeeId":2064, "rater_id":369082, "Language": ""},
+        {"hrid":6167, "name":"Yin Shan Wong (Anna)", "courriel":"mu_t1-bc5852@sdoperapera.com", "employeeId":2086, "rater_id":None, "Language": ""},
+        {"hrid":6132, "name":"Yuen Yee Kong (Jeanette)", "courriel":"mu_t1-5cc811@sdoperapera.com", "employeeId":2050, "rater_id":369691, "Language": ""},
+        {"hrid":5238, "name":"Esau Hussein", "courriel":"mu_t1-1fc754@sdoperapera.com", "employeeId":1071, "rater_id":426968, "Language": ""},
+        {"hrid":5939, "name":"Sol Oh", "courriel":"mu_t1-e1ff12@sdoperapera.com", "employeeId":1839, "rater_id":426564, "Language": ""},
+        {"hrid":6084, "name":"Kateryna Druk", "courriel":"mu_t1-60752e@sdoperapera.com", "employeeId":1990, "rater_id":427069, "Language": ""},
+        {"hrid":1089, "name":"Ramy Negash", "courriel":"mu_t1-d39ba9@sdoperapera.com", "employeeId":280, "rater_id":427271, "Language": ""},
+        {"hrid":5686, "name":"Yu-Jun (Joanna) Lin", "courriel":"mu_t1-4f6ee4@sdoperapera.com", "employeeId":1566, "rater_id":428887, "Language": ""},
+        {"hrid":5968, "name":"Hanif Praditio", "courriel":"mu_t1-23b29b@sdoperapera.com", "employeeId":1873, "rater_id":437878, "Language": ""},
+        {"hrid":6050, "name":"Sri Wahyuningrum Roeslani", "courriel":"mu_t1-a434a1@sdoperapera.com", "employeeId":1954, "rater_id":None, "Language": ""},
+        {"hrid":6269, "name":"Kuan-te Liu (Terry)", "courriel":"mu_t1-d750f3@sdoperapera.com", "employeeId":2271, "rater_id":None, "Language": ""},
+        {"hrid":6268, "name":"Tsz Kiu Tsang (Kristy)", "courriel":"mu_t1-6cc0db@sdoperapera.com", "employeeId":2270, "rater_id":None, "Language": ""},
+        {"hrid":6271, "name":"Matthew Sinaga", "courriel":"mu_t1-b20f50@sdoperapera.com", "employeeId":2272, "rater_id":438584, "Language": ""},
+        {"hrid":6270, "name":"Aprilia chang", "courriel":"mu_t1-110681@sdoperapera.com", "employeeId":2273, "rater_id":438281, "Language": ""},
+        {"hrid":6181, "name":"Yu-Chia Pan", "courriel":"mu_t1-9fb898@sdoperapera.com", "employeeId":2100, "rater_id":None, "Language": ""},
+        {"hrid":6290, "name":"Yuk Ting Fung", "courriel":"mu_t1-23a725@sdoperapera.com", "employeeId":2295, "rater_id":None, "Language": ""},
+        {"hrid":6291, "name":"Tsz Ching Cheng \"Melody\"", "courriel":"mu_t1-849c53@sdoperapera.com", "employeeId":2296, "rater_id":438484, "Language": ""},
+        {"hrid":6300, "name":"Hyeyun Park", "courriel":"mu_t1-44773e@sdoperapera.com", "employeeId":2306, "rater_id":439999, "Language": ""},
+        {"hrid":6302, "name":"Dohyeon Kim", "courriel":"mu_t1-92c981@sdoperapera.com", "employeeId":2308, "rater_id":483181, "Language": ""},
+        {"hrid":6307, "name":"Heejin Na", "courriel":"mu_t1-63842d@sdoperapera.com", "employeeId":2315, "rater_id":440200, "Language": ""},
+        {"hrid":1133, "name":"Eunhae (Grace) Hwang", "courriel":"mu_t1-fcb4ba@sdoperapera.com", "employeeId":365, "rater_id":439696, "Language": ""},
+        {"hrid":6053, "name":"Feruza Salaydinova", "courriel":"mu_t1-4a9ad0@sdoperapera.com", "employeeId":1957, "rater_id":438080, "Language": ""},
+        {"hrid":6301, "name":"Jisun Lee", "courriel":"mu_t1-b2eca5@sdoperapera.com", "employeeId":2307, "rater_id":None, "Language": ""},
+        {"hrid":6312, "name":"Sanjarbek Zokirov", "courriel":"mu_t1-0aaf9a@sdoperapera.com", "employeeId":2320, "rater_id":None, "Language": ""}
+    ]
+}
+
+# ---------- UTILS ----------
 def norm_email(s):
     if pd.isna(s): return ""
     s = str(s).strip().lower()
@@ -24,86 +168,39 @@ def email_localpart(s):
     s = norm_email(s)
     return s.split("@", 1)[0] if "@" in s else s
 
-# ---------- MAPPING COMPLET (Source de vérité) ----------
-MAPPING = [
-    {"hrid":5917, "name":"Felicia Wong", "courriel":"mu_t1-cab662@sdoperapera.com", "employeeId":1815,"Language":"Australian","rater_id":298069},
-    {"hrid":6331, "name":"Alexander Slack", "courriel":"mu_t1-846c88@sdoperapera.com", "employeeId":2343,"Language":"Australian", "rater_id":449089},
-    {"hrid":6339, "name":"Ian Zhi Quan Lee", "courriel":"mu_t1-ff4c16@sdoperapera.com", "employeeId":2351,"Language":"Australian", "rater_id":441514},
-    {"hrid":6338, "name":"Dean Ash", "courriel":"mu_t1-214777@sdoperapera.com", "employeeId":2350,"Language":"Australian", "rater_id":447374},
-    {"hrid":6343, "name":"Hayley Puckeridge", "courriel":"mu_t1-7dbd16@sdoperapera.com", "employeeId":2356,"Language":"Australian", "rater_id":447273},
-    {"hrid":6347, "name":"Gilson Cruzat", "courriel":"mu_t1-65a457@sdoperapera.com", "employeeId":2360,"Language":"Australian", "rater_id":434645},
-    {"hrid":6354, "name":"Robyn Treacy", "courriel":"mu_t1-d4bdd9@sdoperapera.com", "employeeId":2367,"Language":"Australian", "rater_id":438888},
-    {"hrid":1309, "name":"Joshua Ortaleza", "courriel":"mu_t1-df4a19@sdoperapera.com", "employeeId":568,"Language":"Australian", "rater_id":447172},
-    {"hrid":6332, "name":"Alexandra de Guzman", "courriel":"mu_t1-469024@sdoperapera.com", "employeeId":2344,"Language":"Australian", "rater_id":448788},
-    {"hrid":6010, "name":"Jean Kyle Alvarez", "courriel":"mu_t1-a872b5@sdoperapera.com", "employeeId":1914,"Language":"Australian", "rater_id":352823},
-    {"hrid":5718, "name":"Ikechukwu Ejechi", "courriel":"mu_t1-a827ac@sdoperapera.com", "employeeId":1600,"Language":"English", "rater_id":414236},
-    {"hrid":5712, "name":"Derrick Narkah", "courriel":"mu_t1-a07134@sdoperapera.com", "employeeId":1597,"Language":"English", "rater_id":413833},
-    {"hrid":6129, "name":"Xiaoman Cai", "courriel":"mu_t1-a2b19e@sdoperapera.com", "employeeId":2047,"Language":"Taiwanese", "rater_id":357365},
-    {"hrid":6137, "name":"Hsiu Fang Hung", "courriel":"mu_t1-7854df@sdoperapera.com", "employeeId":2055,"Language":"Taiwanese", "rater_id":375453},
-    {"hrid":6026, "name":"Weiqiang Wang", "courriel":"mu_t1-3fde0a@sdoperapera.com", "employeeId":1930,"Language":"Taiwanese", "rater_id":406560},
-    {"hrid":6126, "name":"Huilei Wang", "courriel":"mu_t1-603f10@sdoperapera.com", "employeeId":2044,"Language":"Taiwanese", "rater_id":439697},
-    {"hrid":6184, "name":"Chia Fan Hsu (Fan)", "courriel":"mu_t1-e829a0@sdoperapera.com", "employeeId":2103,"Language":"Taiwanese", "rater_id":381319},
-    {"hrid":6265, "name":"Hsinyi Lee", "courriel":"mu_t1-6147ae@sdoperapera.com", "employeeId":2267,"Language":"Taiwanese", "rater_id":441008},
-    {"hrid":6266, "name":"Lixiong Wei", "courriel":"mu_t1-8de2fa@sdoperapera.com", "employeeId":2268,"Language":"Cantonese", "rater_id":441109},
-    {"hrid":6196, "name":"Yu Kiu Li", "courriel":"mu_t1-426166@sdoperapera.com", "employeeId":2116,"Language":"Cantonese", "rater_id":439899},
-    {"hrid":6195, "name":"Lu Yan Li", "courriel":"mu_t1-365930@sdoperapera.com", "employeeId":2115, "Language":"Cantonese", "rater_id":440302},
-    {"hrid":6115, "name":"Phouangsouvanh Misaiphon", "courriel":"mu_t1-7eb49e@sdoperapera.com", "employeeId":2021, "Language":"Lao", "rater_id":434242},
-    {"hrid":5959, "name":"Sayprasongh Savann", "courriel":"mu_t1-458248@sdoperapera.com", "employeeId":1862, "Language":"Lao", "rater_id":439695},
-    {"hrid":5957, "name":"Saleumsith Misaiphon", "courriel":"mu_t1-eacd8c@sdoperapera.com", "employeeId":1860, "Language":"Lao", "rater_id":438079},
-    {"hrid":6111, "name":"Ariya Misaiphon", "courriel":"mu_t1-bb9a18@sdoperapera.com", "employeeId":2018, "Language":"Lao", "rater_id":439998},
-    {"hrid":6109, "name":"Souriny Phomthavong", "courriel":"mu_t1-1db9ee@sdoperapera.com", "employeeId":2017, "Language":"Lao","rater_id":440301},
-    {"hrid":5971, "name":"Budiman Lauw", "courriel":"mu_t1-88a22a@sdoperapera.com", "employeeId":1876, "Language":"Indonesian", "rater_id":352010},
-    {"hrid":5941, "name":"Hyun Jeong Park", "courriel":"mu_t1-a85ca4@sdoperapera.com", "employeeId":1841, "Language":"Korean", "rater_id":329787},
-    {"hrid":6299, "name":"Lucas Su-hyun Park", "courriel":"mu_t1-a5526c@sdoperapera.com", "employeeId":2305, "Language":"Korean", "rater_id":445252},
-    {"hrid":5874, "name":"Jeremy Jaret Cruz", "courriel":"mu_t1-f7be16@sdoperapera.com", "employeeId":1767, "Language":"French", "rater_id":389892},
-    {"hrid":1489, "name":"Dudley Orestil", "courriel":"mu_t1-274483@sdoperapera.com", "employeeId":751, "Language":"French", "rater_id":None},
-    {"hrid":5868, "name":"Yannis Guibinga", "courriel":"mu_t1-295d80@sdoperapera.com", "employeeId":1761, "Language":"French", "rater_id":354636},
-    {"hrid":5866, "name":"Bernard Boucher", "courriel":"mu_t1-380a88@sdoperapera.com", "employeeId":1759, "Language":"French", "rater_id":414438},
-    {"hrid":6297, "name":"Alissa Rivera-Laporte", "courriel":"mu_t1-cf4f6f@sdoperapera.com", "employeeId":2303, "Language":"French", "rater_id":445656},
-    {"hrid":6314, "name":"Lea Vong", "courriel":"mu_t1-bd5449@sdoperapera.com", "employeeId":2322, "Language":"French", "rater_id":448786},
-    {"hrid":6313, "name":"Tidiane Yeo", "courriel":"mu_t1-bc0d65@sdoperapera.com", "employeeId":2321, "Language":"French", "rater_id":448787},
-    {"hrid":5899, "name":"Ugo Trelis", "courriel":"mu_t1-d5cb9b@sdoperapera.com", "employeeId":1789, "Language":"French", "rater_id":414034},
-    {"hrid":5871, "name":"Hiba El Moataqid", "courriel":"mu_t1-2e8579@sdoperapera.com", "employeeId":1764, "Language":"French", "rater_id":354838},
-    {"hrid":5348, "name":"Azizbek Numonov", "courriel":"mu_t1-1af543@sdoperapera.com", "employeeId":1509, "Language":"Uzbek", "rater_id":445154},
-    {"hrid":6034, "name":"Khusniyabonu Imomova", "courriel":"mu_t1-33bfb4@sdoperapera.com", "employeeId":1937, "Language":"Uzbek", "rater_id":445555},
-    {"hrid":5840, "name":"Abdulatif Nematullaev", "courriel":"mu_t1-ed775f@sdoperapera.com", "employeeId":1732, "Language":"Uzbek", "rater_id":445355},
-    {"hrid":6306, "name":"Madina Kodirova", "courriel":"mu_t1-216d9c@sdoperapera.com", "employeeId":2312, "Language":"Uzbek", "rater_id":445050},
-    {"hrid":6303, "name":"Asliddin Malikov", "courriel":"mu_t1-633923@sdoperapera.com", "employeeId":2309, "Language":"Uzbek", "rater_id":445356},
-    {"hrid":6304, "name":"Khumoyun Ergashev", "courriel":"mu_t1-936f8c@sdoperapera.com", "employeeId":2310, "Language":"Uzbek", "rater_id":445051},
-    {"hrid":6357, "name":"Jennafa Rosenblatt", "courriel":"mu_t1-1c3bd3@sdoperapera.com", "employeeId":2370,"Language":"Australian", "rater_id":439392},
-    {"hrid":6116, "name":"Soukhinkham Pakdimounivong", "courriel":"mu_t1-93f997@sdoperapera.com", "employeeId":2022,"Language":"Lao", "rater_id":444747},
-    {"hrid":6363, "name":"Robin Graham", "courriel":"mu_t1-53daf4@sdoperapera.com", "employeeId":2388,"Language":"Australian", "rater_id":443841},
-    {"hrid":5997, "name":"Hafsa Patel", "courriel":"mu_t1-25701a@sdoperapera.com", "employeeId":1902,"Language":"Australian", "rater_id":450402},
-    {"hrid":6370, "name":"Patricia Hamilton", "courriel":"mu_t1-09472c@sdoperapera.com", "employeeId":2397,"Language":"French", "rater_id":453735},
-    {"hrid":6368, "name":"Yannick Coulibaly", "courriel":"mu_t1-792ce8@sdoperapera.com", "employeeId":2395,"Language":"French", "rater_id":455048},
-    {"hrid":6372, "name":"Marc-André Veillette", "courriel":"mu_t1-0e3dc2@sdoperapera.com", "employeeId":2399,"Language":"French", "rater_id":459189},
-    {"hrid":6369, "name":"Chamy Diabate", "courriel":"mu_t1-b396e6@sdoperapera.com", "employeeId":2396,"Language":"French", "rater_id":447474},
-    {"hrid":6373, "name":"Chih Yu Chou (Jenny)", "courriel":"mu_t1-ae3afd@sdoperapera.com", "employeeId":2408,"Language":"Taiwanese", "rater_id":470301}
-]
-
-# ---------- LOGIQUE API AVEC CACHE ----------
+# ---------- LOGIQUE API ----------
 @st.cache_data(ttl=300)
 def fetch_data(start, end, employee_ids):
     base_url = f"https://{SUBDOMAIN}.bamboohr.com/api/v1/time_tracking/timesheet_entries"
     ids_csv = ",".join(map(str, employee_ids))
-    r = requests.get(base_url, params={"start": start, "end": end, "employeeIds": ids_csv},
-                     headers={"Accept": "application/json"}, auth=(API_KEY, "x"), timeout=30)
-    r.raise_for_status()
-    return r.json() if isinstance(r.json(), list) else r.json().get("entries", [])
-
-# --- PREPARATION DES DONNÉES DE BASE ---
-map_df = pd.DataFrame(MAPPING)
-map_df["courriel_norm"] = map_df["courriel"].apply(norm_email)
-map_df["email_local"] = map_df["courriel_norm"].apply(email_localpart)
-emp_ids = map_df["employeeId"].tolist()
+    try:
+        r = requests.get(base_url, params={"start": start, "end": end, "employeeIds": ids_csv},
+                         headers={"Accept": "application/json"}, auth=(API_KEY, "x"), timeout=30)
+        r.raise_for_status()
+        return r.json() if isinstance(r.json(), list) else r.json().get("entries", [])
+    except Exception as e:
+        st.error(f"Erreur API BambooHR : {e}")
+        return []
 
 # --- INTERFACE SIDEBAR ---
 with st.sidebar:
+    st.header("👥 Sélection Équipe")
+    team_choice = st.selectbox("Équipe à analyser :", list(MAPPINGS.keys()))
+    current_team_mapping = MAPPINGS[team_choice]
+    
+    st.divider()
     st.header("⚙️ Configuration")
+    # Sélecteur de date
     selected_date = st.date_input("Date d'analyse", value=datetime.now(pytz.timezone(COMPANY_TZ)))
     csv_file = st.file_uploader("Fichier CSV de vitesse", type="csv")
     st.divider()
     refresh_btn = st.button("🔄 Actualiser tout", type="primary")
+
+# --- PRÉPARATION DES DONNÉES DU MAPPING SÉLECTIONNÉ ---
+map_df = pd.DataFrame(current_team_mapping)
+map_df["courriel_norm"] = map_df["courriel"].apply(norm_email)
+map_df["email_local"] = map_df["courriel_norm"].apply(email_localpart)
+emp_ids = map_df["employeeId"].tolist()
 
 # --- ONGLETS ---
 tab1, tab2 = st.tabs(["📊 Performance & Vitesse", "🕒 Présence Live"])
@@ -111,15 +208,10 @@ tab1, tab2 = st.tabs(["📊 Performance & Vitesse", "🕒 Présence Live"])
 # --- LOGIQUE GLOBALE ---
 day_str = selected_date.strftime("%Y-%m-%d")
 
-# 1. FETCH LIVE STATUS (Toujours à jour pour Tab 2)
-try:
-    with st.spinner("Vérification des présences..."):
-        # On vérifie aujourd'hui pour le live
-        now_str = datetime.now(pytz.timezone(COMPANY_TZ)).strftime("%Y-%m-%d")
-        live_entries = fetch_data(now_str, now_str, emp_ids)
-        open_ids = {int(e.get("employeeId")) for e in live_entries if e.get("end") is None and e.get("employeeId")}
-except:
-    open_ids = set()
+# 1. FETCH LIVE STATUS
+now_str = datetime.now(pytz.timezone(COMPANY_TZ)).strftime("%Y-%m-%d")
+live_entries = fetch_data(now_str, now_str, emp_ids)
+open_ids = {int(e.get("employeeId")) for e in live_entries if e.get("end") is None and e.get("employeeId")}
 
 # --- TAB 2 : PRÉSENCE LIVE ---
 with tab2:
@@ -127,17 +219,12 @@ with tab2:
     presence_df = map_df[["hrid", "name", "Language", "employeeId"]].copy()
     presence_df["Statut"] = presence_df["employeeId"].apply(lambda x: "✅ Clocked in" if int(x) in open_ids else "⛔ Not clocked in")
     
-    # Couleurs pour le statut
     def color_status(val):
         color = '#2ecc71' if "✅" in val else '#e74c3c'
         return f'color: {color}; font-weight: bold'
     
-    #st.dataframe(presence_df.drop(columns="employeeId").style.applymap(color_status, subset=['Statut']), use_container_width=True)
-    # On remplace .applymap par .map
     st.dataframe(presence_df.drop(columns="employeeId").style.map(color_status, subset=['Statut']), use_container_width=True)
-    
-    nb_in = len(open_ids)
-    st.metric("Total en ligne", nb_in)
+    st.metric("Total en ligne", len(open_ids))
 
 # --- TAB 1 : PERFORMANCE ---
 with tab1:
@@ -145,14 +232,13 @@ with tab1:
         st.info("Veuillez uploader le fichier CSV pour voir l'analyse de performance.")
     else:
         try:
-            # Récupération heures
+            # Récupération heures Bamboo
             entries = fetch_data(day_str, day_str, emp_ids)
             bdf = pd.DataFrame(entries) if entries else pd.DataFrame(columns=["employeeId","hours","projectInfo"])
             
             if not bdf.empty:
                 bdf["hours"] = pd.to_numeric(bdf["hours"], errors="coerce").fillna(0.0)
                 bdf["taskName"] = bdf.apply(lambda r: (r.get("projectInfo") or {}).get("task", {}).get("name"), axis=1)
-                
                 bdf["generic_part"] = bdf["hours"].where(bdf["projectInfo"].isna(), 0.0)
                 bdf["break_part"] = bdf["hours"].where(bdf["taskName"] == "Break (Paid)", 0.0)
                 bdf["specific_nobreak"] = bdf["hours"].where(bdf["projectInfo"].notna() & (bdf["taskName"] != "Break (Paid)"), 0.0)
@@ -165,9 +251,9 @@ with tab1:
                 hours_agg["heures_génériques_plus_break"] = hours_agg["heures_génériques"] + hours_agg["break_heures"]
                 hours_agg["heures_totales"] = hours_agg["heures_génériques_plus_break"] + hours_agg["heures_spécifiques"]
             else:
-                hours_agg = pd.DataFrame(columns=["employeeId", "heures_totales"])
+                hours_agg = pd.DataFrame(columns=["employeeId", "heures_totales", "heures_génériques_plus_break"])
 
-            # Traitement Vitesse
+            # Traitement Vitesse CSV
             raw_csv = pd.read_csv(csv_file)
             raw_csv["email_norm"] = raw_csv["Rater Email"].apply(norm_email)
             csv_agg = raw_csv.groupby("email_norm", as_index=False).agg(
@@ -176,7 +262,7 @@ with tab1:
             )
             csv_agg["speed_qph"] = np.where(csv_agg["answered_time_hr"] > 0, csv_agg["answered_sum"] / csv_agg["answered_time_hr"], 0.0).round(2)
 
-            # Fusion
+            # Fusion finale
             final = map_df.merge(hours_agg, on="employeeId", how="left").merge(csv_agg, left_on="courriel_norm", right_on="email_norm", how="left")
             
             # KPIs
@@ -184,15 +270,18 @@ with tab1:
             final['Productivité'] = ((final['answered_time_hr'] / final['heures_totales']) * 100).replace([np.inf, -np.inf], 0).fillna(0)
 
             # Dashboard
-            st.subheader(f"Analyse du {day_str}")
-            
-            c1, c2, c3 = st.columns(3)
+            st.subheader(f"Analyse {team_choice} - {day_str}")
             active_final = final[final['speed_qph'] > 0]
-            c1.metric("Utilisation Moy.", f"{active_final['Utilization'].mean():.1f}%")
-            c2.metric("Productivité Moy.", f"{active_final['Productivité'].mean():.1f}%")
-            c3.metric("Heures Totales", f"{final['heures_totales'].sum():.1f}h")
+            
+            if not active_final.empty:
+                c1, c2, c3 = st.columns(3)
+                c1.metric("Utilisation Moy.", f"{active_final['Utilization'].mean():.1f}%")
+                c2.metric("Productivité Moy.", f"{active_final['Productivité'].mean():.1f}%")
+                c3.metric("Heures Totales", f"{final['heures_totales'].sum():.1f}h")
 
-            st.dataframe(active_final[["name", "Language", "heures_totales", "answered_sum", "speed_qph", "Utilization", "Productivité"]].sort_values("speed_qph", ascending=False), use_container_width=True)
+                st.dataframe(active_final[["name", "Language", "heures_totales", "answered_sum", "speed_qph", "Utilization", "Productivité"]].sort_values("speed_qph", ascending=False), use_container_width=True)
+            else:
+                st.warning("Aucune donnée de vitesse trouvée pour les employés de cette équipe dans le CSV.")
 
         except Exception as e:
             st.error(f"Erreur d'analyse : {e}")
