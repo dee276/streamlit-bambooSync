@@ -116,5 +116,5 @@ TEAM_MISSISSAUGA = [
 # Dictionnaire pour le sélecteur Streamlit
 MAPPINGS = {
     "Équipe Montréal": TEAM_MONTREAL,
-    "Équipe Europe": TEAM_MISSISSAUGA,
+    "Équipe Mississauga": TEAM_MISSISSAUGA,
 }
