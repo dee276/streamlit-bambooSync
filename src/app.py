@@ -171,7 +171,23 @@ with tab1:
                 c2.metric("Productivité Moy.", f"{active_final['Productivité'].mean():.1f}%")
                 c3.metric("Heures Totales", f"{final['heures_totales'].sum():.1f}h")
 
-                st.dataframe(active_final[["name", "Language", "heures_totales", "answered_sum", "speed_qph", "Utilization", "Productivité"]].sort_values("speed_qph", ascending=False), use_container_width=True)
+                #st.dataframe(active_final[["name", "Language", "heures_totales", "answered_sum", "speed_qph", "Utilization", "Productivité"]].sort_values("speed_qph", ascending=False), use_container_width=True)
+                formatted_df = active_final[[
+                    "name", "Language", "heures_totales", "answered_time_hr", "answered_sum", 
+                    "speed_qph", "Utilization", "Productivité",
+                ]].sort_values("speed_qph", ascending=False)
+
+                st.dataframe(
+                    formatted_df.style.format({
+                        "answered_time_hr": "{:.2f}",
+                        "heures_totales": "{:.2f}",
+                        "speed_qph": "{:.2f}",
+                        "Utilization": "{:.2f}%",
+                        "Productivité": "{:.2f}%",
+                        "answered_sum": "{:.0f}"  # Pas de décimale pour le nombre de tâches
+                    }), 
+                    use_container_width=True
+                )
             else:
                 st.warning("Aucune donnée de vitesse trouvée pour cette équipe dans le CSV.")
 
