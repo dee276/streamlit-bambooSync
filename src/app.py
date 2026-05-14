@@ -173,7 +173,7 @@ with tab1:
 
                 #st.dataframe(active_final[["name", "Language", "heures_totales", "answered_sum", "speed_qph", "Utilization", "Productivité"]].sort_values("speed_qph", ascending=False), use_container_width=True)
                 formatted_df = active_final[[
-                    "name", "Language", "heures_totales", "answered_time_hr", "answered_sum", 
+                    "hrid","name", "Language", "heures_totales", "answered_time_hr", "answered_sum", 
                     "speed_qph", "Utilization", "Productivité",
                 ]].sort_values("speed_qph", ascending=False)
 
